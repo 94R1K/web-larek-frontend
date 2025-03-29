@@ -46,7 +46,13 @@ yarn build
 
 ### Интерфейс продукта
 ```ts
-export interface IProduct {
+export interface IProductStatus {
+  inBasket: boolean;
+}
+```
+
+```ts
+export interface IProductItem {
   id: string;
   title: string;
   description: string;
@@ -80,17 +86,23 @@ export interface IAppState {
 
 **Данные товара для отображения в корзине**
 ```ts
-export type TBasketProduct = Pick<IProduct, '_title' | '_price' | '_id'>;
+export type TBasketProduct = Pick<IProduct, '_title' | '_price' | '_id' | 'inBasket'>;
 ```
 
 **Информация о заказе, получаемая из модальной формы (адрес и способ оплаты)**
 ```ts
-export type TOrderInfo = Pick<IOrder, 'payment' | 'address'>;
+export interface IOrderInfoForm {
+	payment: 'cash' | 'card' | null;
+	address: string;
+}
 ```
 
 **Данные пользователя, вводимые в модальном окне (email и телефон)**
 ```ts
-export type TUserInfo = Pick<IOrder, 'email' | 'phone'>;
+export interface IContactForm {
+	email: string;
+	phone: string;
+}
 ```
 
 **Тип для формирования ошибок при проверке полей заказа**
@@ -177,16 +189,19 @@ export type TOrderResult = {
 - `basket: TBasketProduct[]` — данные о товарах, добавленных пользователем в корзину.
 - `order: IOrder | null` — информация о заказе.
 - `preview: string | null` — ID товара для предварительного просмотра в модальном окне.
-- `formErrors: FormErrors` — ошибки, возникшие при заполнении данных для заказа.
+- `formErrors: FormErrors | null` — ошибки, возникшие при заполнении данных для заказа.
 
 **Методы:**
 - `setProducts(items: IProduct[]): void` — задаёт список товаров и инициирует событие обновления.
-- `setPreview(item: LotItem): void` — устанавливает товар для предварительного просмотра и генерирует событие.
-- `getPreviewProduct(productId: string): IProduct` — возвращает данные о товаре по его ID.
+- `setPreview(item: IPtoduct): void` — устанавливает товар для предварительного просмотра и генерирует событие.
+- `getProductById(productId: string): IProduct` - принимает в аргументы ID продукта и возращает товара.
 - `addProductInBasket(product: IProduct): void` — добавляет товар в корзину и сообщает об этом через событие.
 - `removeProductFromBasket(product: IProduct): void` — удаляет товар из корзины, инициируя событие.
 - `clearBasket(): void` — очищает корзину.
+- `clearOrder(): void ` - очищает данные о заказе
+- `clearErrors(): void` - очищает сообщения об ошибках форм
 - `getTotal(): number` — рассчитывает общую стоимость товаров в корзине.
+- `setOrderBasket()` - устанавливает данные о заказанных товарах и сумме покупок в `order`.
 - `setOrderField(field: keyof IOrderForm, value: string): void` — обновляет указанное поле заказа.
 - `validateOrder(): boolean` — проверяет, заполнены ли все необходимые данные для оформления заказа.
 
@@ -201,20 +216,22 @@ export type TOrderResult = {
 Абстрактный класс, содержащий базовые свойства и методы для создания визуальных компонентов.
 
 **Конструктор:**
-- `protected constructor(protected readonly container: HTMLElement, protected events: IEvents)` — принимает DOM-контейнер и менеджер событий.
+- `protected constructor(protected readonly container: HTMLElement` - принимает DOM-элемент контейнер.
 
 **Поля:**
 - `protected readonly container: HTMLElement` — контейнер для рендеринга и объект для работы с событиями.
 
 **Методы:**
 - `protected setText(element: HTMLElement, value: unknown): void` — устанавливает текстовое содержимое элемента.
-- `setDisabled(element: HTMLElement, state: boolean): void` — меняет состояние блокировки элемента.
 - `protected setImage(element: HTMLImageElement, src: string, alt?: string): void` — задаёт изображение с альтернативным текстом.
+- `setDisabled(element: HTMLElement, state: boolean): void` - сменить статус блокировки.
 - `render(data?: Partial<T>): HTMLElement` — возвращает DOM-элемент, заполненный переданными данными.
 
-### Класс ModalView
+### Класс Modal
 
 Класс для управления модальными окнами, который наследуется от View.
+
+- `constructor(container: HTMLElement, protected events: IEvents)` - конструктор наследуется от абстрактного класса View, а также принимает экземпляр класса EventEmmiter.
 
 **Поля:**
 - `container: HTMLElement` — элемент модального окна.
@@ -226,11 +243,14 @@ export type TOrderResult = {
 - `set content(value: HTMLElement)` — задаёт содержимое модального окна.
 - `open(): void` — делает окно видимым на странице.
 - `close(): void` — скрывает окно.
+- `closeByEsc(evt: KeyboardEvent)` - отвечает за закрытие модального окна нажатием на клавишу `Esc`
 - `render(data: IModalData): HTMLElement` — расширяет метод render базового класса, возвращая заполненный данными корневой элемент модального окна.
 
 ### Класс Form
 
-Класс для создания форм в модальных окнах, основанный на View.
+Предназначен для реализаци форм для вывода в модальном окне. Класс наследуется от абстрактного класса View.
+
+- `constructor(container: HTMLElement, protected events: IEvents)` - конструктор наследуется от абстрактного класса View, а также принимает экземпляр класса EventEmmiter.
 
 **Поля:**
 - `container: HTMLFormElement` — HTML-форма.
@@ -238,32 +258,43 @@ export type TOrderResult = {
 - `protected _errors: HTMLElement` — элемент для отображения ошибок.
 
 **Методы:**
+- `onInputChange(field: keyof T, value: string)` - инициирует событие изменения инпутов.
 - `set valid(value: boolean)` — включает или отключает кнопку отправки.
-- `getInputValues(): Record<string, string>` — возвращает объект с данными, введёнными в форму.
 - `set error(data: (value: string) => void)` — выводит сообщение об ошибке.
 - `resetForm(): void` — очищает все поля ввода.
-- `onInputChange(field: keyof T, value: string)` — инициирует событие изменения значения в форме.
+- `render(state: Partial<T> & IFormState)` - наследует и расширяет родительский метод отрисовки элемента.
 
-### Класс FormOrder
+### Класс OrderInfoForm
 
-Класс, реализующий форму для ввода данных об оплате и адресе доставки, наследуется от Form.
+Необходим для реализации контента модального окна с данными о оплате и адресе доставки заказа. Является дочерним от класса Form.
+
+Конструктор наследуется от абстрактного класса родительского класса Form.
 
 **Поля:**
 - `container: HTMLFormElement` — HTML-форма.
 - `protected _submit: HTMLButtonElement` — кнопка подтверждения формы.
 - `protected _errors: HTMLElement` — область для вывода ошибок.
-- `protected buttonOnline: HTMLButtonElement;` — кнопка для выбора онлайн-оплаты.
-- `protected buttonСash: HTMLButtonElement` — кнопка для оплаты при получении.
-- `protected inputAddress: HTMLInputElement` — поле для ввода адреса.
+- `protected _paymentButtons: HTMLButtonElement[];` - массив элементов кнопок выбора оплаты.
 
 **Методы:**
-- `setSelected(name: string): void` — выделяет выбранную пользователем кнопку.
-- `toggleClass(element: HTMLElement, className: string, force?: boolean): void` — переключает наличие указанного класса у элемента.
-- `resetSelested(name: string): void` — убирает выделение с кнопки.
+- `set address(value: string)` - устанавливает значение в поле адреса.
+- `set payment(name: string)` - переключает выбранную пользователем кнопку выбора способа оплаты.
+- `resetForm(): void` - наследует родительский клас - очищает поля формы и убирает выделение с кнопки.
 
-### Класс BasketView
+#### Класс ContactsForm
+Необходим для реализации контента модального окна с данными о контактах пользователя. Является дочерним от класса Form.
 
-Отвечает за отображение содержимого корзины в модальном окне.
+Конструктор наследуется от абстрактного класса родительского класса Form.
+
+Методы:
+- `set phone(value: string)` - устанавливает данные в input `phone`.
+- `set email(value: string)` - устанавливает данные в input `email`.
+
+### Класс Basket
+
+Отвечает за отображение корзины с товарами в модальном окне. Класс наследуется от абстрактного класса View.
+
+- `constructor(container: HTMLElement, protected events: IEvents)` - конструктор наследуется от абстрактного класса View, а также принимает экземпляр класса EventEmmiter
 
 **Поля:**
 - `container: HTMLElement` — контейнер корзины.
@@ -275,23 +306,42 @@ export type TOrderResult = {
 **Методы:**
 - `set itemsList(items: HTMLElement[])` — заполняет список корзины элементами.
 - `set total(total: number)` — обновляет значение итоговой суммы.
-- `isEmpty(): boolean` — проверяет, содержит ли корзина товары.
 
 ### Класс Success
 
 Класс, отвечающий за показ сообщения об успешном оформлении заказа в модальном окне, наследуется от View.
 
+- `constructor(container: HTMLElement, actions: ISuccessActions)` - конструктор наследуется от абстрактного класса View, а также принимает вторым аргументом объект с обработчиком клика кнопки закрытия окна подтверждения успешного заказа.
+
 **Поля:**
 - `container: HTMLElement` — корневой DOM-элемент.
 - `protected _button: HTMLButtonElement` — кнопка завершения.
-- `protected _totalMessage: HTMLElement` — элемент для отображения сообщения о списании средств.
+- `protected _total: HTMLElement` - сообщение о списании суммы.
 
 **Методы:**
-- `set totalMessage(text: string)` — задаёт текст, информирующий о сумме списания.
+- `set total(text:string)` - устанавливает текст сообщения о списании стоимости товаров.
+
+### Класс Page
+Отвечает за главную страницу сайта. Наследуется от абстрактного класса View.
+
+-`constructor(container: HTMLElement, events: IEvents)` - конструктор наследуется от абстрактного класса View, а также принимает экземпляр класса EventEmmiter.
+
+Поля:
+- `protected _counter: HTMLElement` - счетчик товаров в корзине.
+- `protected _gallery: HTMLElement` - список товаров для покупки.
+- `protected _wrapper: HTMLElement` - контейнер-обертка страницы.
+- `protected _basket: HTMLElement` - кнопка перехода в корзину.
+
+Методы:
+- `set counter(value: number)` - устанавливает контент счетчика.
+- `set gallery(items: HTMLElement[])` - устанавливает контент галереи.
+- `set locked(value: boolean)` - отвечает за блокировку прокрутки страницы при открытии модального окна.
 
 ### Класс Сard
 
 Класс, предназначенный для отображения карточки товара как на главной странице, так и в модальном окне с детальной информацией или в списке корзины, наследуется от View.
+
+- `constructor(protected blockName: string, container: HTMLElement, actions?: ICardActions)` - конструктор наследуется от абстрактного класса View, а также принимает первым аргументом имя блолка и третьим, необязательным - объект с обработчиком клика по карточке товара.
 
 **Поля:**
 - `container: HTMLElement` — DOM-элемент карточки.
@@ -316,6 +366,8 @@ export type TOrderResult = {
 
 Дочерний класс от Card, отвечающий за показ карточки товара в модальном окне.
 
+- `constructor(container: HTMLElement, actions?: ICardActions)` - конструктор наследуется от родительского класса и принимает в аргументы опциональный аргумент - действие при клике на кнопку покупки товара.
+
 **Поля:**
 - `container: HTMLElement` — элемент карточки.
 - `events: IEvents` — менеджер событий.
@@ -331,17 +383,22 @@ export type TOrderResult = {
 - `cheсkProduct(id: string): string` — проверяет стоимость товара и его наличие в корзине, возвращая соответствующий текст для кнопки.
 - `setButtonContent(content: string): void` — устанавливает текст кнопки.
 - `set description(value: string | string[])` — задаёт или обновляет описание товара.
+- `set inBasket(value: boolean)` - устанавливает значение поля кнопки.
+- `set price(value: number)` - устанавливает значение цены, блокирует кнопку, если товар бесценен.
+- `disabledButton()` - блокирует кнопку покупки бесценного товара.
 
 ### Класс CardBasket
 
 Дочерний от Card класс, предназначенный для отображения товара в списке корзины.
 
+- `constructor(container: HTMLElement, actions?: ICardActions)` - конструктор наследуется от родительского класса и принимает в аргументы опциональный аргумент - действие при клике на кнопку удаления товара из корзины.
+
 Дополнительно содержит:
-- `deleteButton: HTMLButtonElement` — кнопка для удаления товара из корзины.
+- `_button: HTMLButtonElement` - кнопка удаления из корзины.
 - `index: HTMLElement` — порядковый номер товара в списке.
 
 **Методы:**
-- `setIndex` — устанавливает индекс товара в корзине
+- `setIndex` — устанавливает индекс товара в корзине.
 ---
 
 ## Слой коммуникации
@@ -349,6 +406,11 @@ export type TOrderResult = {
 ### Класс AppApi
 
 Этот класс расширяет функциональность базового Api и отвечает за взаимодействие с сервером.
+
+- `constructor(cdn: string, baseUrl: string, options?: RequestInit)` - конструктор наследуется от базового класса Api, а также принимает адрес для получения изображения товаров.
+
+Поля наследуется от базового класса Api, а также включает поле:
+- `readonly cdn: string` - адрес для получения изображения товаров.
 
 **Методы:**
 - `getProductsList(): Promise<IProduct[]>` — возвращает промис с массивом всех товаров, полученных с сервера.
@@ -364,26 +426,24 @@ export type TOrderResult = {
 **Перечень событий, генерируемых в системе:**
 
 **События, связанные с изменением данных (от моделей):**
-- `products: changed` — изменение каталога товаров.
-- `basket: changed` — обновление списка товаров в корзине.
+- `products:changed` - изменение каталога товаров.
+- `basket:changed` - изменения списка товаров в корзине.
+- `preview:changed` - изменеие элемента, выбранного для превью.
+- `order:ready` - заполнены все поля для оформления заказа.
+- `formErrors:change` - изменился объект, хранящий данные об ошибках.
 
 **События, возникающие при взаимодействии пользователя с интерфейсом (от представлений):**
 - `card:select` — выбор карточки для просмотра в модальном окне.
 - `card:open` — открытие модального окна с информацией о товаре.
 - `card:add` — добавление товара в корзину.
-- `card:delete` — удаление товара из корзины.
-- `basket:open` — отображение модального окна с содержимым корзины.
-- `basket:close` — закрытие окна корзины.
+- `card:remove` - удаление товара из корзины.
+- `basket:open` - открытие модального окна с корзиной.
 - `basket:submit` — отправка заказа из корзины при нажатии кнопки «Оформить».
 - `orderInfo:open` — показ модального окна с информацией о заказе.
-- `cash:selected` — выбор способа оплаты наличными.
-- `online:selected` — выбор онлайн-оплаты.
-- `orderInfo:input` — изменение данных в форме заказа.
-- `orderInfo:submit` — закрытие модального окна с информацией о пользователе при нажатии «Далее» с переходом к форме заказа.
-- `orderInfo:validation` — событие, сигнализирующее о необходимости проверки формы с информацией о заказе.
-- `userInfo:input` — изменение данных адреса в форме пользователя.
-- `userInfo:submit` — закрытие модального окна с данными пользователя при нажатии «Далее».
-- `userInfo:validation` — событие, указывающее на необходимость валидации формы с информацией о пользователе.
-- `orderSubmit:open` — открытие окна с подтверждением успешного оформления заказа.
-- `orderSubmit:submit` — закрытие окна с успешным оформлением заказа по нажатию кнопки «За новыми покупками».
+- `/^order\..*:change/` - изменение данных в форме информации о заказе.
+- `/^contacts\..*:change/` - изменение данных в форме контактов пользователя.
+- `order:submit` - закрытие модального окна с информацией о пользователе при нажатии на кнопку «Далее».
+- `contacts:submit` - закрытие модального окна с информацией о пользователе при нажатии на кнопку «Далее».
+- `order:success` - успешное оформление заказа.
+- `modal:open` - открытие модального окна.
 - `modal:close` — закрытие модального окна при нажатии на крестик, клавишу Esc или клике по затемнённому оверлею.

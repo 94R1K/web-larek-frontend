@@ -1,32 +1,44 @@
-export interface IProduct {
+export interface IProductStatus {
+	inBasket: boolean;
+}
+
+export interface IProductItem {
 	id: string;
 	title: string;
 	description: string;
 	image: string;
-	price: number | null
-	category: 'софт-скил' | 'хард-скил' | 'кнопка' | 'дополнительное' | 'другое';
+	price: number | null;
+	category: TCategory;
 }
 
-export interface IOrder {
-	payment: 'cash' | 'card';
+export interface IOrderInfoForm {
+	payment: 'cash' | 'card' | null;
+	address: string;
+}
+
+export interface IContactForm {
 	email: string;
 	phone: string;
-	address: string;
+}
+
+export type TOrderForm =  IOrderInfoForm & IContactForm
+
+export interface IOrder extends TOrderForm {
 	total: number;
 	items: string[];
 }
 
 export interface IAppState {
-	catalog: IProduct[];
+	products: IProduct[];
 	basket: string[];
 	preview: string | null;
-	order: IOrder | null;
+	order: IOrder;
 }
 
-export type TOrderInfo = Pick<IOrder, 'payment' | 'address'>;
-export type TUserInfo = Pick<IOrder, 'email' | 'phone'>;
-export type FormErrors = Partial<Record<keyof IOrder, string>>;
-export type TBasketProduct = Pick<IProduct, 'title' | 'price' | 'id'>;
+export type IProduct = IProductItem & IProductStatus
+export type TCategory = 'софт-скил' | 'хард-скил' | 'кнопка' | 'дополнительное' | 'другое';
+export type TBasketProduct = Pick<IProduct, 'title' | 'price' | 'id' | 'inBasket'>;
+export type TFormErrors = Partial<Record<keyof IOrder, string>>;
 export type TOrderResult = {
 	id: string;
 	total: number;
